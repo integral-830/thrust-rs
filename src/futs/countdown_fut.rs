@@ -17,7 +17,6 @@ impl Future for Countdown {
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<Self::Output> {
         let value = self.value.as_mut().unwrap();
         if *value != 0 {
-            println!("{}", *value);
             *value -= 1;
             let waker = cx.waker().clone();
             waker.wake();
