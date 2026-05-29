@@ -14,17 +14,56 @@
 
 ## Architecture
 
-Single-threaded executor using only `std`:
-
-- **Queue:** `std::sync::mpsc::channel`
-- **Tasks:** `Arc<Task>` where `Task` holds `Mutex<Pin<Box<dyn Future>>>`
-- **Waker:** Hand-rolled `RawWaker` + vtable
-- **No I/O, no timers, no work-stealing**
+Single-threaded cooperative executor using only `std`. Three core components: `Task`, `Executor`, and hand-rolled `RawWaker`.
 
 ```
-spawn(future) → Box::pin → Arc<Mutex<...>> → push task_id to mpsc
-poll_loop() → recv → lock → poll → (Ready: drop | Pending: re-enqueue)
+spawn(future) → Box::pin → Arc<Task> → send to mpsc queue
+poll_loop() → recv → lock Mutex → poll → Ready: drop | Pending: wake() → re-enqueue
 ```
+
+### Task
+
+```rust
+pub struct Task {
+    pub future: Mutex<Pin<Box<dyn Future<Output = ()> + Send>>>,
+    pub sender: Sender<Arc<Task>>,
+}
+```
+
+- `Pin<Box<dyn Future>>` — heap-allocated, immovable future
+- `Mutex` — mutable access during polling (unnecessary overhead since executor is single-threaded)
+- `sender` — used by waker to re-enqueue task on `wake()`
+
+### Executor
+
+```rust
+pub struct Executor {
+    sender: Sender<Arc<Task>>,
+    receiver: Receiver<Arc<Task>>,
+}
+```
+
+- `spawn()` — wraps future in `Arc<Task>`, pushes to queue
+- `run()` — receives task, builds waker, polls future
+
+### RawWaker VTable
+
+| Method | What it does |
+|--------|-------------|
+| `clone` | `Arc::clone` the task, return new `RawWaker` |
+| `wake` | `Arc::from_raw` → `send(task)` — consumes waker |
+| `wake_by_ref` | `Arc::from_raw` → `clone` → `send` → `mem::forget` — keeps waker alive |
+| `drop` | `Arc::from_raw` → drop — balances the `into_raw` from creation |
+
+**Key invariant:** every `Arc::from_raw` must be balanced by exactly one of `into_raw` / `mem::forget` / `drop`. Violations = memory leaks or use-after-free.
+
+### Current Limitations
+
+- Single-threaded, no work stealing
+- No timers, no sleep, no I/O reactor
+- No task priorities, no cancellation
+- `std::sync::mpsc` for queue (overkill for SPSC)
+- `Mutex` on every future (unnecessary atomic barriers)
 
 ## Raw Results
 
@@ -156,7 +195,5 @@ scaling_eff = (time_10k × 10) / time_100k
 yield_overhead = per_task(yield_once) - per_task(spawn)
 marginal_poll = Δper_task / Δpolls_per_task
 ```
-
----
 
 *Week 1 baseline · Apple M2 · aarch64-apple-darwin · rustc stable · release build*
