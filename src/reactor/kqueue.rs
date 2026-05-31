@@ -1,8 +1,8 @@
 use std::io;
 use std::os::fd::RawFd;
+use std::ptr::null;
 use std::ptr::null_mut;
 use std::time::Duration;
-use std::{ffi::c_void, ptr::null};
 
 use libc::{kevent, EINTR, EVFILT_READ, EVFILT_WRITE, EV_ADD, EV_CLEAR, EV_DELETE};
 
