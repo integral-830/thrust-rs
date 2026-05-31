@@ -165,7 +165,7 @@ fn pipe_kq_event() {
     assert_eq!(fd_res, 0);
     let r_fd = fds[0];
     let w_fd = fds[1];
-    kq.add_read(r_fd).unwrap();
+    kq.add_read(r_fd, 1).unwrap();
     let t_byte = [21u8];
     let write_resp = unsafe { libc::write(w_fd, t_byte.as_ptr() as *const libc::c_void, 1) };
     assert_eq!(write_resp, 1);

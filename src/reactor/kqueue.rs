@@ -25,8 +25,8 @@ impl Kqueue {
         self.fd
     }
 
-    pub fn add_read(&self, fd: RawFd) -> io::Result<()> {
-        let event = make_event(fd as usize, EVFILT_READ, EV_ADD | EV_CLEAR, null_mut());
+    pub fn add_read(&self, fd: RawFd, token: usize) -> io::Result<()> {
+        let event = make_event(fd as usize, EVFILT_READ, EV_ADD | EV_CLEAR, token);
         let add_read_resp = unsafe { libc::kevent(self.fd, &event, 1, null_mut(), 0, null_mut()) };
         if add_read_resp == -1 {
             Err(io::Error::last_os_error())
@@ -34,8 +34,8 @@ impl Kqueue {
             Ok(())
         }
     }
-    pub fn add_write(&self, fd: RawFd) -> io::Result<()> {
-        let event = make_event(fd as usize, EVFILT_WRITE, EV_ADD | EV_CLEAR, null_mut());
+    pub fn add_write(&self, fd: RawFd, token: usize) -> io::Result<()> {
+        let event = make_event(fd as usize, EVFILT_WRITE, EV_ADD | EV_CLEAR, token);
         let add_write_resp = unsafe { libc::kevent(self.fd, &event, 1, null_mut(), 0, null_mut()) };
         if add_write_resp == -1 {
             Err(io::Error::last_os_error())
@@ -45,8 +45,8 @@ impl Kqueue {
     }
     pub fn delete(&self, fd: RawFd) -> io::Result<()> {
         let changes = [
-            make_event(fd as usize, EVFILT_READ, EV_DELETE, null_mut()),
-            make_event(fd as usize, EVFILT_WRITE, EV_DELETE, null_mut()),
+            make_event(fd as usize, EVFILT_READ, EV_DELETE, 0),
+            make_event(fd as usize, EVFILT_WRITE, EV_DELETE, 0),
         ];
 
         let del_resp = unsafe {
@@ -102,14 +102,14 @@ impl Kqueue {
     }
 }
 
-pub fn make_event(ident: usize, filter: i16, flags: u16, udata: *mut c_void) -> libc::kevent {
+pub fn make_event(ident: usize, filter: i16, flags: u16, token: usize) -> libc::kevent {
     libc::kevent {
         ident: ident as libc::uintptr_t,
         filter,
         flags,
         fflags: 0,
         data: 0,
-        udata,
+        udata: token as *mut libc::c_void,
     }
 }
 
