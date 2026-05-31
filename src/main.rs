@@ -1,6 +1,7 @@
 #![allow(unused)]
 
 use std::future::{self, Future};
+use std::mem;
 use std::pin::Pin;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{mpsc, Arc, Mutex};
@@ -10,15 +11,10 @@ use std::time::{Duration, Instant};
 use fut::futs::countdown_fut::Countdown;
 use fut::futs::immediate_fut::ImmediateReady;
 use fut::futs::yield_once::YieldOnce;
-use fut::runtime::executor::{self, Executor};
+use fut::reactor::kqueue::{self, Kqueue};
+use fut::runtime::executor::Executor;
 use fut::runtime::raw_waker::waker_for_task;
 use fut::runtime::tasks::Task;
-
-struct DummyWaker;
-
-impl Wake for DummyWaker {
-    fn wake(self: Arc<Self>) {}
-}
 
 fn main() {
     // let (tx, rx) = mpsc::channel::<Arc<Task>>();
@@ -159,4 +155,32 @@ fn yield_once_1m() {
     let elapsed = start.elapsed();
     println!("completed 10,000 tasks in {elapsed:?}");
     assert_eq!(count.load(std::sync::atomic::Ordering::Relaxed), 1_000_000);
+}
+
+#[test]
+fn pipe_kq_event() {
+    let kq = Kqueue::new().unwrap();
+    let mut fds = [0; 2];
+    let fd_res = unsafe { libc::pipe(fds.as_mut_ptr()) };
+    assert_eq!(fd_res, 0);
+    let r_fd = fds[0];
+    let w_fd = fds[1];
+    kq.add_read(r_fd).unwrap();
+    let t_byte = [21u8];
+    let write_resp = unsafe { libc::write(w_fd, t_byte.as_ptr() as *const libc::c_void, 1) };
+    assert_eq!(write_resp, 1);
+    let mut events = [unsafe { mem::zeroed::<libc::kevent>() }; 10];
+
+    let res = kq.wait(&mut events, Some(Duration::from_secs(1))).unwrap();
+    assert_eq!(res, 1);
+
+    let r_ev = &events[0];
+    let ident = r_ev.ident;
+    assert_eq!(ident, r_fd as libc::uintptr_t);
+    assert_eq!(r_ev.filter, libc::EVFILT_READ);
+
+    unsafe {
+        libc::close(r_fd);
+        libc::close(w_fd);
+    }
 }

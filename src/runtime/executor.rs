@@ -2,9 +2,8 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::task::{Context, Poll};
 
-use crate::runtime::tasks::Task;
-
 use super::raw_waker::waker_for_task;
+use super::tasks::Task;
 
 pub struct Executor {
     pub sender: Sender<Arc<Task>>,
