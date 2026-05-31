@@ -1,5 +1,5 @@
 [package]
-name = "fut"
+name = "thrust-rs"
 version = "0.1.0"
 edition = "2024"
 

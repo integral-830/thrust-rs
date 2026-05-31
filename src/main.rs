@@ -8,45 +8,15 @@ use std::sync::{mpsc, Arc, Mutex};
 use std::task::{Context, Poll, Wake, Waker};
 use std::time::{Duration, Instant};
 
-use fut::futs::countdown_fut::Countdown;
-use fut::futs::immediate_fut::ImmediateReady;
-use fut::futs::yield_once::YieldOnce;
-use fut::reactor::kqueue::{self, Kqueue};
-use fut::reactor::{Interest, Reactor};
-use fut::runtime::executor::Executor;
-use fut::runtime::raw_waker::waker_for_task;
-use fut::runtime::tasks::Task;
+use thrust_rs::futs::countdown_fut::Countdown;
+use thrust_rs::futs::yield_once::YieldOnce;
+use thrust_rs::reactor::kqueue::Kqueue;
+use thrust_rs::reactor::{Interest, Reactor};
+use thrust_rs::runtime::executor::Executor;
+use thrust_rs::runtime::raw_waker::waker_for_task;
+use thrust_rs::runtime::tasks::Task;
 
 fn main() {
-    // let (tx, rx) = mpsc::channel::<Arc<Task>>();
-    // let mut _fut = Box::pin(ImmediateReady::new(42));
-
-    // let mut yield_one_fut = Box::pin(YieldOnce::default());
-    // let mut _countdown_fut = Box::pin(Countdown::new(4));
-
-    // let task = Arc::new(Task {
-    //     future: Mutex::new(yield_one_fut),
-    //     sender: tx,
-    // });
-
-    // let waker = waker_for_task(task.clone());
-    // let mut cx = Context::from_waker(&waker);
-
-    // loop {
-    //     let poll_result = {
-    //         let mut future = task.future.lock().unwrap();
-    //         future.as_mut().poll(&mut cx)
-    //     };
-    //     match poll_result {
-    //         Poll::Ready(v) => {
-    //             println!("Fut completed.");
-    //             break;
-    //         }
-    //         Poll::Pending => {
-    //             println!("Fut is pending...");
-    //         }
-    //     }
-    // }
     let executor = Executor::new();
     executor.spawn(YieldOnce::default());
     executor.run();
