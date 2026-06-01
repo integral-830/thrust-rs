@@ -1,6 +1,7 @@
 use std::io;
 use std::os::fd::RawFd;
 use std::ptr::{null, null_mut};
+use std::sync::Arc;
 use std::time::Duration;
 use std::{
     collections::HashMap,
@@ -13,10 +14,12 @@ use libc::{
 };
 
 use crate::reactor::kqueue::Kqueue;
+use crate::reactor::registration::RegistrationState;
 
 use self::kqueue::make_event;
 
 pub mod kqueue;
+pub mod registration;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Token(pub usize);
@@ -30,6 +33,7 @@ pub struct Registration {
     pub fd: RawFd,
     pub interest: Interest,
     pub waker: Waker,
+    pub state: Arc<RegistrationState>,
 }
 
 pub struct Reactor {
@@ -57,8 +61,15 @@ impl Reactor {
         })
     }
 
-    pub fn register(&self, fd: RawFd, interest: Interest, waker: Waker) -> io::Result<Token> {
+    pub fn register(
+        &self,
+        fd: RawFd,
+        interest: Interest,
+        waker: Waker,
+        state: Arc<RegistrationState>,
+    ) -> io::Result<Token> {
         let token = Token(self.fetch_and_advance_token());
+        state.set_token(token);
         let filters = match interest {
             Interest::READ => EVFILT_READ,
             Interest::WRITE => EVFILT_WRITE,
@@ -76,12 +87,43 @@ impl Reactor {
                 fd,
                 interest,
                 waker,
+                state,
             },
         );
         self.trigger_wake()?;
         Ok(token)
     }
-
+    // pub fn reregister(
+    //     &self,
+    //     token: Token,
+    //     fd: RawFd,
+    //     interest: Interest,
+    //     waker: Waker,
+    // ) -> io::Result<()> {
+    //     let filters = match interest {
+    //         Interest::READ => EVFILT_READ,
+    //         Interest::WRITE => EVFILT_WRITE,
+    //     };
+    //     let event = make_event(fd as usize, filters, EV_ADD | EV_CLEAR, token.0);
+    //
+    //     let resp = unsafe { libc::kevent(self.kq.fd, &event, 1, null_mut(), 0, null()) };
+    //
+    //     if resp == -1 {
+    //         return Err(io::Error::last_os_error());
+    //     }
+    //     self.registry.lock().unwrap().insert(
+    //         token,
+    //         Registration {
+    //             fd,
+    //             interest,
+    //             waker,
+    //
+    //         },
+    //     );
+    //     self.trigger_wake()?;
+    //     Ok(())
+    // }
+    //
     pub fn fetch_and_advance_token(&self) -> usize {
         self.advance_token
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed)
@@ -125,6 +167,7 @@ impl Reactor {
                 continue;
             }
             if let Some(registration) = registry.remove(&token) {
+                registration.state.clear_token();
                 registration.waker.wake();
             }
         }

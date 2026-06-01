@@ -11,7 +11,8 @@ use std::time::{Duration, Instant};
 use thrust_rs::futs::countdown_fut::Countdown;
 use thrust_rs::futs::yield_once::YieldOnce;
 use thrust_rs::reactor::kqueue::Kqueue;
-use thrust_rs::reactor::{Interest, Reactor};
+use thrust_rs::reactor::registration::RegistrationState;
+use thrust_rs::reactor::{Interest, Reactor, Token};
 use thrust_rs::runtime::executor::Executor;
 use thrust_rs::runtime::raw_waker::waker_for_task;
 use thrust_rs::runtime::tasks::Task;
@@ -198,7 +199,9 @@ fn reactor_one_shot_registration() {
         count: wake_count_1.clone(),
     }));
 
-    let token_1 = reactor.register(r_fd, Interest::READ, waker_1).unwrap();
+    let token_1 = reactor
+        .register(r_fd, Interest::READ, waker_1, RegistrationState::new())
+        .unwrap();
 
     let byte = [1u8];
 
@@ -232,7 +235,9 @@ fn reactor_one_shot_registration() {
         count: wake_count_2.clone(),
     }));
 
-    let token_2 = reactor.register(r_fd, Interest::READ, waker_2).unwrap();
+    let token_2 = reactor
+        .register(r_fd, Interest::READ, waker_2, RegistrationState::new())
+        .unwrap();
 
     assert_ne!(token_1, token_2);
 
@@ -258,4 +263,55 @@ fn reactor_one_shot_registration() {
         libc::close(r_fd);
         libc::close(w_fd);
     }
+}
+
+#[test]
+fn registration_state_lifecycle() {
+    let state = RegistrationState::new();
+
+    assert_eq!(state.get_token(), None);
+    assert!(!state.is_registered());
+
+    let token = Token(42);
+
+    state.set_token(token);
+
+    assert_eq!(state.get_token(), Some(Token(42)));
+    assert!(state.is_registered());
+
+    state.clear_token();
+
+    assert_eq!(state.get_token(), None);
+    assert!(!state.is_registered());
+}
+
+#[test]
+fn registration_state_shared_between_arcs() {
+    let state = RegistrationState::new();
+
+    let clone = state.clone();
+
+    state.set_token(Token(7));
+
+    assert_eq!(clone.get_token(), Some(Token(7)));
+    assert!(clone.is_registered());
+
+    clone.clear_token();
+
+    assert_eq!(state.get_token(), None);
+    assert!(!state.is_registered());
+}
+
+#[test]
+fn registration_state_cleared_when_reactor_consumes_event() {
+    let state = RegistrationState::new();
+
+    state.set_token(Token(99));
+
+    assert!(state.is_registered());
+
+    state.clear_token();
+
+    assert!(!state.is_registered());
+    assert_eq!(state.get_token(), None);
 }
