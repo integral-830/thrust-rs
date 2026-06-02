@@ -1,3 +1,5 @@
+use std::io;
+use std::net::{SocketAddr, TcpListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
@@ -8,13 +10,6 @@ use thrust_rs::reactor::Reactor;
 
 #[test]
 fn test_connect_future() {
-    use std::io;
-    use std::net::TcpListener;
-    use std::pin::Pin;
-    use std::sync::Arc;
-    use std::task::{Context, Poll, Waker};
-    use std::time::{Duration, Instant};
-
     let reactor = Arc::new(Reactor::new().unwrap());
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -111,11 +106,6 @@ fn fd_count() -> usize {
 }
 #[test]
 fn test_connect_cancel_no_fd_leak() {
-    use std::net::SocketAddr;
-    use std::pin::Pin;
-    use std::sync::Arc;
-    use std::task::{Context, Poll, Waker};
-
     let reactor = Arc::new(Reactor::new().unwrap());
 
     let addr: SocketAddr = "127.0.0.1:65000".parse().unwrap();
