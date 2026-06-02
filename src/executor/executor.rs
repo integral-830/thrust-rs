@@ -36,7 +36,7 @@ impl Executor {
         });
         self.sender.send(task).unwrap();
         self.task_count
-            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+            .fetch_add(1, std::sync::atomic::Ordering::AcqRel);
     }
 
     pub fn run(&self) {
@@ -53,12 +53,12 @@ impl Executor {
                 match poll_result {
                     Poll::Ready(()) => {
                         self.task_count
-                            .fetch_sub(1, std::sync::atomic::Ordering::Relaxed);
+                            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
                     }
                     Poll::Pending => {}
                 }
             }
-            if self.task_count.load(std::sync::atomic::Ordering::Relaxed) == 0 {
+            if self.task_count.load(std::sync::atomic::Ordering::Acquire) == 0 {
                 break;
             }
             if !work_done {
