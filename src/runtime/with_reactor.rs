@@ -23,3 +23,7 @@ pub fn with_reactor<T>(f: impl FnOnce(&Arc<Reactor>) -> T) -> T {
         f(reactor)
     })
 }
+
+pub fn clear_reactor() {
+    REACTOR.with(|r| *r.borrow_mut() = None);
+}

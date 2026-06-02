@@ -12,7 +12,7 @@ pub struct Executor {
     pub sender: Sender<Arc<Task>>,
     pub receiver: Receiver<Arc<Task>>,
     pub reactor: Arc<Reactor>,
-    pub task_count: AtomicUsize,
+    pub task_count: Arc<AtomicUsize>,
 }
 
 impl Executor {
@@ -22,7 +22,7 @@ impl Executor {
             sender: tx,
             receiver: rx,
             reactor,
-            task_count: AtomicUsize::new(0),
+            task_count: Arc::new(AtomicUsize::new(0)),
         }
     }
 
@@ -41,23 +41,7 @@ impl Executor {
 
     pub fn run(&self) {
         loop {
-            let mut work_done = false;
-            while let Ok(task) = self.receiver.try_recv() {
-                work_done = true;
-                let waker = waker_for_task(task.clone());
-                let mut cx = Context::from_waker(&waker);
-                let poll_result = {
-                    let mut future = task.future.lock().unwrap();
-                    future.as_mut().poll(&mut cx)
-                };
-                match poll_result {
-                    Poll::Ready(()) => {
-                        self.task_count
-                            .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
-                    }
-                    Poll::Pending => {}
-                }
-            }
+            let work_done = self.run_until_empty();
             if self.task_count.load(std::sync::atomic::Ordering::Acquire) == 0 {
                 break;
             }
@@ -65,5 +49,26 @@ impl Executor {
                 self.reactor.run_once(Some(10));
             }
         }
+    }
+
+    pub fn run_until_empty(&self) -> bool {
+        let mut work_done = false;
+        while let Ok(task) = self.receiver.try_recv() {
+            work_done = true;
+            let waker = waker_for_task(task.clone());
+            let mut cx = Context::from_waker(&waker);
+            let poll_result = {
+                let mut future = task.future.lock().unwrap();
+                future.as_mut().poll(&mut cx)
+            };
+            match poll_result {
+                Poll::Ready(()) => {
+                    self.task_count
+                        .fetch_sub(1, std::sync::atomic::Ordering::AcqRel);
+                }
+                Poll::Pending => {}
+            }
+        }
+        work_done
     }
 }
