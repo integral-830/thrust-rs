@@ -20,9 +20,9 @@ pub enum ConnectState {
 }
 
 pub struct ConnectFuture {
-    fd: RawFd,
-    reactor: Arc<Reactor>,
-    state: ConnectState,
+    pub fd: RawFd,
+    pub reactor: Arc<Reactor>,
+    pub state: ConnectState,
 }
 
 impl ConnectFuture {
@@ -125,11 +125,6 @@ impl Future for ConnectFuture {
                     return std::task::Poll::Pending;
                 }
                 let mut so_error: c_int = 0;
-                println!(
-                    "registered={}, so_error={}",
-                    registration_state.is_registered(),
-                    so_error
-                );
                 let mut len = mem::size_of::<c_int>() as socklen_t;
 
                 let sock_op_r = unsafe {

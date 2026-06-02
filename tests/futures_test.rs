@@ -11,7 +11,7 @@ use thrust_rs::runtime::tasks::Task;
 fn yield_once_test() {
     let (tx, rx) = mpsc::channel::<Arc<Task>>();
 
-    let mut yield_one_fut = Box::pin(YieldOnce::default());
+    let yield_one_fut = Box::pin(YieldOnce::default());
 
     let task = Arc::new(Task {
         future: Mutex::new(yield_one_fut),

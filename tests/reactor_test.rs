@@ -3,7 +3,7 @@ use std::time::Duration;
 
 use thrust_rs::reactor::kqueue::Kqueue;
 use thrust_rs::reactor::registration::RegistrationState;
-use thrust_rs::reactor::{Interest, Reactor, Token};
+use thrust_rs::reactor::{Interest, Reactor};
 
 #[test]
 fn pipe_kq_event() {

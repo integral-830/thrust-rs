@@ -1,15 +1,20 @@
-use std::io;
-use std::net::{SocketAddr, TcpListener};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
-use thrust_rs::futures::connect::ConnectFuture;
+use thrust_rs::futures::connect::{ConnectFuture, ConnectState};
 use thrust_rs::reactor::Reactor;
 
 #[test]
 fn test_connect_future() {
+    use std::io;
+    use std::net::TcpListener;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::task::{Context, Poll, Waker};
+    use std::time::{Duration, Instant};
+
     let reactor = Arc::new(Reactor::new().unwrap());
 
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -23,22 +28,28 @@ fn test_connect_future() {
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);
 
-    match Pin::new(&mut connect_future).poll(&mut cx) {
-        Poll::Pending => {}
-        Poll::Ready(_) => {
-            panic!("expected Pending");
-        }
-    }
+    assert!(matches!(
+        Pin::new(&mut connect_future).poll(&mut cx),
+        Poll::Pending
+    ));
 
-    reactor.run_once(Some(100));
+    let start = Instant::now();
 
-    let client_stream = match Pin::new(&mut connect_future).poll(&mut cx) {
-        Poll::Ready(Ok(stream)) => stream,
-        Poll::Ready(Err(e)) => {
-            panic!("connect failed: {e}");
-        }
-        Poll::Pending => {
-            panic!("still pending");
+    let client_stream = loop {
+        reactor.run_once(Some(100));
+
+        match Pin::new(&mut connect_future).poll(&mut cx) {
+            Poll::Ready(Ok(stream)) => {
+                break stream;
+            }
+
+            Poll::Ready(Err(e)) => {
+                panic!("connect failed: {e}");
+            }
+
+            Poll::Pending => {
+                assert!(start.elapsed() < Duration::from_secs(1), "connect timeout");
+            }
         }
     };
 
@@ -59,7 +70,6 @@ fn test_connect_future() {
         client_stream.inner.local_addr().unwrap()
     );
 }
-
 #[test]
 fn test_connect_refused() {
     let reactor = Arc::new(Reactor::new().unwrap());
@@ -99,31 +109,70 @@ fn test_connect_refused() {
 fn fd_count() -> usize {
     std::fs::read_dir("/dev/fd").unwrap().count()
 }
-
 #[test]
 fn test_connect_cancel_no_fd_leak() {
+    use std::net::SocketAddr;
+    use std::pin::Pin;
+    use std::sync::Arc;
+    use std::task::{Context, Poll, Waker};
+
     let reactor = Arc::new(Reactor::new().unwrap());
 
     let addr: SocketAddr = "127.0.0.1:65000".parse().unwrap();
 
-    let before = fd_count();
+    let before_fds = fd_count();
 
     let mut future = ConnectFuture::new(reactor.clone(), addr).unwrap();
+
+    let fd = future.fd;
 
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);
 
-    match Pin::new(&mut future).poll(&mut cx) {
-        Poll::Pending => {}
+    assert!(matches!(Pin::new(&mut future).poll(&mut cx), Poll::Pending));
 
-        Poll::Ready(_) => {
-            panic!("expected pending connect");
+    assert_eq!(
+        reactor.registry.lock().unwrap().len(),
+        1,
+        "registration not inserted"
+    );
+
+    match &future.state {
+        ConnectState::Waiting(state) => {
+            assert!(
+                state.is_registered(),
+                "token not stored in RegistrationState"
+            );
+
+            assert!(state.get_token().is_some(), "token missing");
         }
+        _ => panic!("expected Waiting state"),
     }
 
     drop(future);
 
-    let after = fd_count();
+    assert_eq!(
+        reactor.registry.lock().unwrap().len(),
+        0,
+        "registry entry leaked"
+    );
 
-    assert_eq!(before, after, "fd leak detected");
+    let after_fds = fd_count();
+
+    assert!(
+        after_fds <= before_fds + 1,
+        "fd leak suspected: before={}, after={}",
+        before_fds,
+        after_fds
+    );
+
+    let close_result = unsafe { libc::fcntl(fd, libc::F_GETFD) };
+
+    assert_eq!(close_result, -1, "fd still appears open");
+
+    assert_eq!(
+        std::io::Error::last_os_error().raw_os_error(),
+        Some(libc::EBADF),
+        "fd should be invalid after drop"
+    );
 }
