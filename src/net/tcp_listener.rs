@@ -6,22 +6,21 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 
 use crate::futures::accept::AcceptFuture;
+use crate::reactor;
 use crate::reactor::registration::RegistrationState;
-use crate::reactor::{self, Reactor};
+use crate::runtime::with_reactor::with_reactor;
 
 pub struct AsyncTcpListener {
     pub inner: TcpListener,
-    pub reactor: Arc<Reactor>,
     pub state: Arc<RegistrationState>,
 }
 
 impl AsyncTcpListener {
-    pub fn bind(addr: &str, reactor: Arc<Reactor>) -> io::Result<Self> {
+    pub fn bind(addr: &str) -> io::Result<Self> {
         let tcp_listner = TcpListener::bind(addr)?;
         tcp_listner.set_nonblocking(true)?;
         Ok(Self {
             inner: tcp_listner,
-            reactor,
             state: RegistrationState::new(),
         })
     }
@@ -35,12 +34,14 @@ impl AsyncTcpListener {
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 let fd = self.inner.as_raw_fd();
                 if !self.state.is_registered() {
-                    self.reactor.register(
-                        fd,
-                        reactor::Interest::READ,
-                        cx.waker().clone(),
-                        self.state.clone(),
-                    )?;
+                    with_reactor(|reactor| {
+                        reactor.register(
+                            fd,
+                            reactor::Interest::READ,
+                            cx.waker().clone(),
+                            self.state.clone(),
+                        )
+                    })?;
                 }
                 Poll::Pending
             }
@@ -57,7 +58,9 @@ impl Drop for AsyncTcpListener {
     fn drop(&mut self) {
         let fd = self.inner.as_raw_fd();
         if let Some(token) = self.state.get_token() {
-            self.reactor.deregister_fd(fd, token);
+            with_reactor(|reactor| {
+                reactor.deregister_fd(fd, token);
+            });
         }
     }
 }

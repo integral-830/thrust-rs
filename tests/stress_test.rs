@@ -2,13 +2,15 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Instant;
 
+use thrust_rs::executor::executor::Executor;
 use thrust_rs::futures::countdown::Countdown;
 use thrust_rs::futures::yield_once::YieldOnce;
-use thrust_rs::runtime::executor::Executor;
+use thrust_rs::reactor::Reactor;
 
 #[test]
 fn stress_10k_each_5_yields() {
-    let executor = Executor::new();
+    let reactor = Arc::new(Reactor::new().unwrap());
+    let executor = Executor::new(reactor);
     let count = Arc::new(AtomicU32::new(0));
     let start = Instant::now();
 
@@ -28,7 +30,8 @@ fn stress_10k_each_5_yields() {
 
 #[test]
 fn yield_once_100k() {
-    let executor = Executor::new();
+    let reactor = Arc::new(Reactor::new().unwrap());
+    let executor = Executor::new(reactor);
     let count = Arc::new(AtomicU32::new(0));
     let start = Instant::now();
 
@@ -47,7 +50,8 @@ fn yield_once_100k() {
 }
 #[test]
 fn yield_once_1m() {
-    let executor = Executor::new();
+    let reactor = Arc::new(Reactor::new().unwrap());
+    let executor = Executor::new(reactor);
     let count = Arc::new(AtomicU32::new(0));
     let start = Instant::now();
 

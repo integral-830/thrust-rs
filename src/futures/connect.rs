@@ -11,7 +11,8 @@ use libc::{
 
 use crate::net::tcp_stream::AsyncTcpStream;
 use crate::reactor;
-use crate::reactor::{registration::RegistrationState, Reactor};
+use crate::reactor::registration::RegistrationState;
+use crate::runtime::with_reactor::with_reactor;
 
 pub enum ConnectState {
     Connecting,
@@ -21,12 +22,11 @@ pub enum ConnectState {
 
 pub struct ConnectFuture {
     pub fd: RawFd,
-    pub reactor: Arc<Reactor>,
     pub state: ConnectState,
 }
 
 impl ConnectFuture {
-    pub fn new(reactor: Arc<Reactor>, addr: SocketAddr) -> io::Result<Self> {
+    pub fn new(addr: SocketAddr) -> io::Result<Self> {
         let sock_fd = unsafe { libc::socket(AF_INET, SOCK_STREAM, 0) };
 
         if sock_fd == -1 {
@@ -75,7 +75,6 @@ impl ConnectFuture {
         if conn_resp == 0 {
             return Ok(Self {
                 fd: sock_fd,
-                reactor,
                 state: ConnectState::Done,
             });
         }
@@ -85,7 +84,6 @@ impl ConnectFuture {
         if err.raw_os_error() == Some(EINPROGRESS) {
             return Ok(Self {
                 fd: sock_fd,
-                reactor,
                 state: ConnectState::Connecting,
             });
         }
@@ -105,12 +103,14 @@ impl Future for ConnectFuture {
         match &mut self.state {
             ConnectState::Connecting => {
                 let state = RegistrationState::new();
-                if let Err(e) = self.reactor.register(
-                    self.fd,
-                    reactor::Interest::WRITE,
-                    cx.waker().clone(),
-                    state.clone(),
-                ) {
+                if let Err(e) = with_reactor(|reactor| {
+                    reactor.register(
+                        self.fd,
+                        reactor::Interest::WRITE,
+                        cx.waker().clone(),
+                        state.clone(),
+                    )
+                }) {
                     unsafe {
                         libc::close(self.fd);
                     }
@@ -157,7 +157,7 @@ impl Future for ConnectFuture {
 
                 let stream = unsafe { TcpStream::from_raw_fd(self.fd) };
 
-                let async_stream = AsyncTcpStream::new(stream, self.reactor.clone());
+                let async_stream = AsyncTcpStream::new(stream);
                 self.state = ConnectState::Done;
                 std::task::Poll::Ready(async_stream)
             }
@@ -176,7 +176,9 @@ impl Drop for ConnectFuture {
             },
             ConnectState::Waiting(registration_state) => {
                 if let Some(token) = registration_state.get_token() {
-                    self.reactor.deregister_fd(self.fd, token);
+                    with_reactor(|reactor| {
+                        reactor.deregister_fd(self.fd, token);
+                    })
                 }
                 unsafe {
                     libc::close(self.fd);

@@ -2,10 +2,11 @@ use std::sync::atomic::AtomicU32;
 use std::sync::{mpsc, Arc, Mutex};
 use std::task::{Context, Poll};
 
+use thrust_rs::executor::executor::Executor;
+use thrust_rs::executor::raw_waker::waker_for_task;
+use thrust_rs::executor::tasks::Task;
 use thrust_rs::futures::yield_once::YieldOnce;
-use thrust_rs::runtime::executor::Executor;
-use thrust_rs::runtime::raw_waker::waker_for_task;
-use thrust_rs::runtime::tasks::Task;
+use thrust_rs::reactor::Reactor;
 
 #[test]
 fn yield_once_test() {
@@ -39,7 +40,8 @@ fn yield_once_test() {
 
 #[test]
 fn yield_once_thousand() {
-    let executor = Executor::new();
+    let reactor = Arc::new(Reactor::new().unwrap());
+    let executor = Executor::new(reactor);
     let count = Arc::new(AtomicU32::new(0));
 
     for _ in 0..1000 {

@@ -1,24 +1,24 @@
 use std::io;
 use std::net::{SocketAddr, TcpListener};
 use std::pin::Pin;
-use std::sync::Arc;
 use std::task::{Context, Poll, Waker};
 use std::time::{Duration, Instant};
 
 use thrust_rs::futures::connect::{ConnectFuture, ConnectState};
-use thrust_rs::reactor::Reactor;
+
+use self::common::install_test_runtime;
+mod common;
 
 #[test]
 fn test_connect_future() {
-    let reactor = Arc::new(Reactor::new().unwrap());
-
+    let reactor = install_test_runtime();
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
 
     listener.set_nonblocking(true).unwrap();
 
     let addr = listener.local_addr().unwrap();
 
-    let mut connect_future = ConnectFuture::new(reactor.clone(), addr).unwrap();
+    let mut connect_future = ConnectFuture::new(addr).unwrap();
 
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);
@@ -67,11 +67,11 @@ fn test_connect_future() {
 }
 #[test]
 fn test_connect_refused() {
-    let reactor = Arc::new(Reactor::new().unwrap());
+    let reactor = install_test_runtime();
 
     let addr = "127.0.0.1:1".parse().unwrap();
 
-    let mut future = ConnectFuture::new(reactor.clone(), addr).unwrap();
+    let mut future = ConnectFuture::new(addr).unwrap();
 
     let waker = Waker::noop();
     let mut cx = Context::from_waker(waker);
@@ -94,25 +94,22 @@ fn test_connect_refused() {
 
             Poll::Ready(Err(err)) => {
                 println!("connect failed as expected: {err}");
-
                 break;
             }
         }
     }
 }
-
 fn fd_count() -> usize {
     std::fs::read_dir("/dev/fd").unwrap().count()
 }
 #[test]
 fn test_connect_cancel_no_fd_leak() {
-    let reactor = Arc::new(Reactor::new().unwrap());
-
+    let reactor = install_test_runtime();
     let addr: SocketAddr = "127.0.0.1:65000".parse().unwrap();
 
     let before_fds = fd_count();
 
-    let mut future = ConnectFuture::new(reactor.clone(), addr).unwrap();
+    let mut future = ConnectFuture::new(addr).unwrap();
 
     let fd = future.fd;
 

@@ -3,37 +3,34 @@ use std::net::TcpStream;
 use std::os::fd::AsRawFd;
 use std::sync::Arc;
 use std::task::{Context, Poll};
-use std::usize;
 
 use crate::futures::read::ReadFuture;
 use crate::futures::write::WriteFuture;
+use crate::reactor;
 use crate::reactor::registration::RegistrationState;
-use crate::reactor::{self, Reactor};
+use crate::runtime::with_reactor::with_reactor;
 
 pub struct AsyncTcpStream {
     pub inner: TcpStream,
-    pub reactor: Arc<Reactor>,
     pub read_state: Arc<RegistrationState>,
     pub write_state: Arc<RegistrationState>,
 }
 
 impl AsyncTcpStream {
-    pub fn new(stream: TcpStream, reactor: Arc<Reactor>) -> io::Result<Self> {
+    pub fn new(stream: TcpStream) -> io::Result<Self> {
         stream.set_nonblocking(true)?;
         Ok(Self {
             inner: stream,
-            reactor,
             read_state: RegistrationState::new(),
             write_state: RegistrationState::new(),
         })
     }
 
-    pub fn connect(addr: &str, reactor: Arc<Reactor>) -> io::Result<Self> {
+    pub fn connect(addr: &str) -> io::Result<Self> {
         let tcp_stream = TcpStream::connect(addr)?;
         tcp_stream.set_nonblocking(true)?;
         Ok(Self {
             inner: tcp_stream,
-            reactor,
             read_state: RegistrationState::new(),
             write_state: RegistrationState::new(),
         })
@@ -46,12 +43,14 @@ impl AsyncTcpStream {
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 let fd = self.inner.as_raw_fd();
                 if !self.read_state.is_registered() {
-                    self.reactor.register(
-                        fd,
-                        reactor::Interest::READ,
-                        cx.waker().clone(),
-                        self.read_state.clone(),
-                    )?;
+                    with_reactor(|reactor| {
+                        reactor.register(
+                            fd,
+                            reactor::Interest::READ,
+                            cx.waker().clone(),
+                            self.read_state.clone(),
+                        )
+                    })?;
                 }
                 Poll::Pending
             }
@@ -68,12 +67,14 @@ impl AsyncTcpStream {
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 let fd = self.inner.as_raw_fd();
                 if !self.write_state.is_registered() {
-                    self.reactor.register(
-                        fd,
-                        reactor::Interest::WRITE,
-                        cx.waker().clone(),
-                        self.write_state.clone(),
-                    )?;
+                    with_reactor(|reactor| {
+                        reactor.register(
+                            fd,
+                            reactor::Interest::WRITE,
+                            cx.waker().clone(),
+                            self.write_state.clone(),
+                        )
+                    })?;
                 }
                 Poll::Pending
             }
@@ -101,10 +102,14 @@ impl Drop for AsyncTcpStream {
         let fd = self.inner.as_raw_fd();
 
         if let Some(token) = self.read_state.get_token() {
-            self.reactor.deregister_fd(fd, token);
+            with_reactor(|reactor| {
+                reactor.deregister_fd(fd, token);
+            })
         }
         if let Some(token) = self.write_state.get_token() {
-            self.reactor.deregister_fd(fd, token);
+            with_reactor(|reactor| {
+                reactor.deregister_fd(fd, token);
+            })
         }
     }
 }
