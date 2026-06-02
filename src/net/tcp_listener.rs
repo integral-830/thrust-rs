@@ -5,6 +5,7 @@ use std::os::fd::AsRawFd;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use crate::futures::accept::AcceptFuture;
 use crate::reactor::registration::RegistrationState;
 use crate::reactor::{self, Reactor};
 
@@ -45,6 +46,10 @@ impl AsyncTcpListener {
             }
             Err(e) => Poll::Ready(Err(e)),
         }
+    }
+
+    pub fn accept(&mut self) -> AcceptFuture<'_> {
+        AcceptFuture { listener: self }
     }
 }
 

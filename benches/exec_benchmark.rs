@@ -2,10 +2,10 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use criterion::{criterion_group, criterion_main, BatchSize, Criterion};
-use fut::futs::countdown_fut::Countdown;
-use fut::futs::wake_latency_fut::WakeLatencyFuture;
-use fut::futs::yield_once::YieldOnce;
-use fut::runtime::executor::Executor;
+use thrust_rs::futures::countdown::Countdown;
+use thrust_rs::futures::wake_latency::WakeLatencyFuture;
+use thrust_rs::futures::yield_once::YieldOnce;
+use thrust_rs::runtime::executor::Executor;
 
 fn bench_spawn_10k(c: &mut Criterion) {
     c.bench_function("spawn_10k", |b| {

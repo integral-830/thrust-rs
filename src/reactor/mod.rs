@@ -1,4 +1,3 @@
-use std::io;
 use std::os::fd::RawFd;
 use std::ptr::{null, null_mut};
 use std::sync::Arc;
@@ -8,6 +7,7 @@ use std::{
     sync::{atomic::AtomicUsize, Mutex},
     task::Waker,
 };
+use std::{io, usize};
 
 use libc::{
     kevent, uintptr_t, EVFILT_READ, EVFILT_USER, EVFILT_WRITE, EV_ADD, EV_CLEAR, NOTE_TRIGGER,
@@ -147,7 +147,9 @@ impl Reactor {
     }
 
     pub fn deregister_fd(&self, fd: RawFd, token: Token) {
-        self.registry.lock().unwrap().remove(&token);
+        if let Some(registration) = self.registry.lock().unwrap().remove(&token) {
+            registration.state.clear_token();
+        }
         self.kq.delete(fd).ok();
     }
 
@@ -162,10 +164,10 @@ impl Reactor {
             .unwrap();
         let mut registry = self.registry.lock().unwrap();
         for event in &events[..n] {
-            let token = Token(event.data as usize);
-            if token.0 == self.wake_ident {
+            if event.filter == libc::EVFILT_USER && event.ident as usize == self.wake_ident {
                 continue;
             }
+            let token = Token(event.udata as usize);
             if let Some(registration) = registry.remove(&token) {
                 registration.state.clear_token();
                 registration.waker.wake();

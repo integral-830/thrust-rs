@@ -5,6 +5,8 @@ use std::sync::Arc;
 use std::task::{Context, Poll};
 use std::usize;
 
+use crate::futures::read::ReadFuture;
+use crate::futures::write::WriteFuture;
 use crate::reactor::registration::RegistrationState;
 use crate::reactor::{self, Reactor};
 
@@ -16,6 +18,16 @@ pub struct AsyncTcpStream {
 }
 
 impl AsyncTcpStream {
+    pub fn new(stream: TcpStream, reactor: Arc<Reactor>) -> io::Result<Self> {
+        stream.set_nonblocking(true)?;
+        Ok(Self {
+            inner: stream,
+            reactor,
+            read_state: RegistrationState::new(),
+            write_state: RegistrationState::new(),
+        })
+    }
+
     pub fn connect(addr: &str, reactor: Arc<Reactor>) -> io::Result<Self> {
         let tcp_stream = TcpStream::connect(addr)?;
         tcp_stream.set_nonblocking(true)?;
@@ -46,8 +58,12 @@ impl AsyncTcpStream {
             Err(e) => Poll::Ready(Err(e)),
         }
     }
-    pub fn poll_write(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
+    pub fn poll_write(&self, cx: &mut Context<'_>, buf: &[u8]) -> Poll<io::Result<usize>> {
         match (&self.inner).write(buf) {
+            Ok(0) => Poll::Ready(Err(io::Error::new(
+                io::ErrorKind::WriteZero,
+                "Attempt to write 0 bytes.",
+            ))),
             Ok(n) => Poll::Ready(Ok(n)),
             Err(ref e) if e.kind() == io::ErrorKind::WouldBlock => {
                 let fd = self.inner.as_raw_fd();
@@ -62,6 +78,20 @@ impl AsyncTcpStream {
                 Poll::Pending
             }
             Err(e) => Poll::Ready(Err(e)),
+        }
+    }
+
+    pub fn read<'a>(&'a mut self, buffer: &'a mut [u8]) -> ReadFuture<'a> {
+        ReadFuture {
+            stream: self,
+            buffer,
+        }
+    }
+    pub fn write<'a>(&'a mut self, buffer: &'a [u8]) -> WriteFuture<'a> {
+        WriteFuture {
+            stream: self,
+            buffer,
+            written: 0,
         }
     }
 }
