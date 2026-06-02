@@ -6,10 +6,11 @@ use std::sync::Arc;
 use std::task::Waker;
 use std::{future::Future, task::Context};
 
+use crate::executor::Executor;
+use crate::reactor::Reactor;
 use crate::runtime::spawn::clear_task_count;
-use crate::{executor::executor::Executor, reactor::Reactor, runtime::spawn::set_spawn_tx};
 
-use self::spawn::{clear_spawn_tx, set_task_count};
+use self::spawn::{clear_spawn_tx, set_spawn_tx, set_task_count};
 use self::with_reactor::{clear_reactor, set_reactor};
 
 pub struct Runtime {

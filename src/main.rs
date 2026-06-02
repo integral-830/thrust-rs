@@ -10,7 +10,6 @@ use std::task::{Context, Poll, Wake, Waker};
 use std::time::{Duration, Instant};
 use std::{io, mem};
 
-use thrust_rs::executor::executor::Executor;
 use thrust_rs::executor::raw_waker::waker_for_task;
 use thrust_rs::executor::tasks::Task;
 use thrust_rs::futures::connect::ConnectFuture;

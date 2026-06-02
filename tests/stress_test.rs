@@ -2,7 +2,7 @@ use std::sync::atomic::AtomicU32;
 use std::sync::Arc;
 use std::time::Instant;
 
-use thrust_rs::executor::executor::Executor;
+use thrust_rs::executor::Executor;
 use thrust_rs::futures::countdown::Countdown;
 use thrust_rs::futures::yield_once::YieldOnce;
 use thrust_rs::reactor::Reactor;

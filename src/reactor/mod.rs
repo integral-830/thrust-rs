@@ -1,3 +1,4 @@
+use std::io;
 use std::os::fd::RawFd;
 use std::ptr::{null, null_mut};
 use std::sync::Arc;
@@ -7,7 +8,6 @@ use std::{
     sync::{atomic::AtomicUsize, Mutex},
     task::Waker,
 };
-use std::{io, usize};
 
 use libc::{
     kevent, uintptr_t, EVFILT_READ, EVFILT_USER, EVFILT_WRITE, EV_ADD, EV_CLEAR, NOTE_TRIGGER,
@@ -164,7 +164,7 @@ impl Reactor {
             .unwrap();
         let mut registry = self.registry.lock().unwrap();
         for event in &events[..n] {
-            if event.filter == libc::EVFILT_USER && event.ident as usize == self.wake_ident {
+            if event.filter == libc::EVFILT_USER && event.ident == self.wake_ident {
                 continue;
             }
             let token = Token(event.udata as usize);

@@ -2,9 +2,9 @@ use std::sync::atomic::AtomicU32;
 use std::sync::{mpsc, Arc, Mutex};
 use std::task::{Context, Poll};
 
-use thrust_rs::executor::executor::Executor;
 use thrust_rs::executor::raw_waker::waker_for_task;
 use thrust_rs::executor::tasks::Task;
+use thrust_rs::executor::Executor;
 use thrust_rs::futures::yield_once::YieldOnce;
 use thrust_rs::reactor::Reactor;
 

@@ -1,5 +1,5 @@
+use std::sync::atomic::AtomicUsize;
 use std::sync::Arc;
-use std::{sync::atomic::AtomicUsize, usize};
 
 use crate::reactor::Token;
 
