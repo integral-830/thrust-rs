@@ -68,14 +68,14 @@ impl Runtime {
                         let work_done = self.executor.run_until_empty();
 
                         if self.executor.task_count.load(Ordering::Acquire) > 0 && !work_done {
-                            self.reactor.run_once(Some(10));
+                            self.reactor.run_once(None);
                         }
                     }
                     return value;
                 }
                 std::task::Poll::Pending => {
                     self.executor.run_until_empty();
-                    self.reactor.run_once(Some(10));
+                    self.reactor.run_once(None);
                 }
             }
         }

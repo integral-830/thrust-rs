@@ -20,9 +20,29 @@ use thrust_rs::net::tcp_stream::AsyncTcpStream;
 use thrust_rs::reactor::kqueue::Kqueue;
 use thrust_rs::reactor::registration::RegistrationState;
 use thrust_rs::reactor::{Interest, Reactor, Token};
+use thrust_rs::runtime::Runtime;
 
 fn main() {
-    // let executor = Executor::new();
-    // executor.spawn(YieldOnce::default());
-    // executor.run();
+    let rt = Runtime::new().unwrap();
+    rt.spawn(async {
+        println!("server task started");
+
+        let mut listener = AsyncTcpListener::bind("127.0.0.1:8080").unwrap();
+
+        println!("listener bound");
+
+        loop {
+            println!("before accept");
+
+            let _ = listener.accept().await;
+
+            println!("accepted");
+        }
+    });
+
+    println!("before run");
+
+    rt.run();
+
+    println!("after run");
 }
