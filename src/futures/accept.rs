@@ -1,14 +1,15 @@
 use std::io;
-use std::net::{SocketAddr, TcpStream};
+use std::net::SocketAddr;
 
 use crate::net::tcp_listener::AsyncTcpListener;
+use crate::net::tcp_stream::AsyncTcpStream;
 
 pub struct AcceptFuture<'a> {
     pub listener: &'a mut AsyncTcpListener,
 }
 
 impl<'a> Future for AcceptFuture<'a> {
-    type Output = io::Result<(TcpStream, SocketAddr)>;
+    type Output = io::Result<(AsyncTcpStream, SocketAddr)>;
 
     fn poll(
         self: std::pin::Pin<&mut Self>,

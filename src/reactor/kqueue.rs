@@ -115,6 +115,7 @@ pub fn make_event(ident: usize, filter: i16, flags: u16, token: usize) -> libc::
 
 impl Drop for Kqueue {
     fn drop(&mut self) {
+        println!("dropping kqueue fd={}", self.fd);
         unsafe {
             libc::close(self.fd);
         }

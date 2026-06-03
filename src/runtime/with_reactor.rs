@@ -24,6 +24,13 @@ pub fn with_reactor<T>(f: impl FnOnce(&Arc<Reactor>) -> T) -> T {
     })
 }
 
+pub fn try_with_reactor<T>(f: impl FnOnce(&Arc<Reactor>) -> T) -> Option<T> {
+    REACTOR.with(|r| {
+        let reactor = r.borrow();
+        reactor.as_ref().map(f)
+    })
+}
+
 pub fn clear_reactor() {
     REACTOR.with(|r| *r.borrow_mut() = None);
 }

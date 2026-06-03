@@ -1,14 +1,15 @@
 use std::io::{self, Read, Write};
-use std::net::TcpStream;
+use std::net::{SocketAddr, TcpStream};
 use std::os::fd::AsRawFd;
 use std::sync::Arc;
 use std::task::{Context, Poll};
 
+use crate::futures::connect::ConnectFuture;
 use crate::futures::read::ReadFuture;
 use crate::futures::write::WriteFuture;
 use crate::reactor;
 use crate::reactor::registration::RegistrationState;
-use crate::runtime::with_reactor::with_reactor;
+use crate::runtime::with_reactor::{try_with_reactor, with_reactor};
 
 pub struct AsyncTcpStream {
     pub inner: TcpStream,
@@ -26,14 +27,8 @@ impl AsyncTcpStream {
         })
     }
 
-    pub fn connect(addr: &str) -> io::Result<Self> {
-        let tcp_stream = TcpStream::connect(addr)?;
-        tcp_stream.set_nonblocking(true)?;
-        Ok(Self {
-            inner: tcp_stream,
-            read_state: RegistrationState::new(),
-            write_state: RegistrationState::new(),
-        })
+    pub fn connect(addr: SocketAddr) -> io::Result<ConnectFuture> {
+        ConnectFuture::new(addr)
     }
 
     pub fn poll_read(&self, cx: &mut Context<'_>, buf: &mut [u8]) -> Poll<io::Result<usize>> {
@@ -102,14 +97,14 @@ impl Drop for AsyncTcpStream {
         let fd = self.inner.as_raw_fd();
 
         if let Some(token) = self.read_state.get_token() {
-            with_reactor(|reactor| {
+            let _ = try_with_reactor(|reactor| {
                 reactor.deregister_fd(fd, token);
-            })
+            });
         }
         if let Some(token) = self.write_state.get_token() {
-            with_reactor(|reactor| {
+            let _ = try_with_reactor(|reactor| {
                 reactor.deregister_fd(fd, token);
-            })
+            });
         }
     }
 }

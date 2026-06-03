@@ -155,13 +155,8 @@ impl Reactor {
 
     pub fn run_once(&self, timeout_ms: Option<u64>) {
         let mut events = [unsafe { std::mem::zeroed::<libc::kevent>() }; 64];
-        let n = self
-            .kq
-            .wait(
-                &mut events,
-                Some(Duration::from_millis(timeout_ms.unwrap())),
-            )
-            .unwrap();
+        let timeout = timeout_ms.map(Duration::from_millis);
+        let n = self.kq.wait(&mut events, timeout).unwrap();
         let mut registry = self.registry.lock().unwrap();
         for event in &events[..n] {
             if event.filter == libc::EVFILT_USER && event.ident == self.wake_ident {
