@@ -134,12 +134,12 @@ park on `kqueue` readiness.
 
 The runtime builds a `Waker` from a custom `RawWakerVTable`.
 
-| Method | Behavior |
-|--------|----------|
-| `clone` | Clones the underlying `Arc<Task>`. |
-| `wake` | Reconstructs the `Arc<Task>` and sends a cloned task to the queue. |
-| `wake_by_ref` | Sends a cloned task without consuming the original waker. |
-| `drop` | Drops the `Arc<Task>` created by `Arc::into_raw`. |
+| Method        | Behavior                                                           |
+| ------------- | ------------------------------------------------------------------ |
+| `clone`       | Clones the underlying `Arc<Task>`.                                 |
+| `wake`        | Reconstructs the `Arc<Task>` and sends a cloned task to the queue. |
+| `wake_by_ref` | Sends a cloned task without consuming the original waker.          |
+| `drop`        | Drops the `Arc<Task>` created by `Arc::into_raw`.                  |
 
 The important invariant is that every `Arc::from_raw` is balanced. Getting this
 wrong means leaking tasks or causing use-after-free bugs.
@@ -956,9 +956,3 @@ Verified repeatedly:
 - No task priorities.
 - TCP connect currently implements IPv4 only.
 - Public API is experimental and intentionally low-level.
-
-## Notes
-
-This is primarily a learning/runtime-internals project. The implementation keeps
-the executor, waker, reactor, and TCP futures explicit so the async control flow
-is easy to inspect and test.
